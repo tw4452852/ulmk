@@ -14,7 +14,10 @@ import (
 
 var (
 	VERSION = "unknown"
+	host    string
 )
+
+const memcgPrefix = "/sys/fs/cgroup/memory/lxc"
 
 func main() {
 	help := flag.Bool("h", false, "show help")
@@ -43,14 +46,16 @@ func main() {
 	}
 	defer eventFile.Close()
 
+	var buf [8]byte
 	for {
-		buf := make([]byte, 8)
-		_, err := eventFile.Read(buf)
+		_, err := eventFile.Read(buf[:])
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("read from eventfd failed: %s\n", err)
 		}
 
 		log.Printf("TRESHOLD CROSSED: %v", buf)
+
+		killOne()
 	}
 
 }
@@ -87,12 +92,11 @@ func parseThreshold(threshold string) (int64, error) {
 }
 
 func setupEventfd(threshold int64) (f *os.File, err error) {
-	host, err := os.Hostname()
+	host, err = os.Hostname()
 	if err != nil {
 		return nil, err
 	}
 
-	const memcgPrefix = "/sys/fs/cgroup/memory/lxc"
 	memoryUsagePath := filepath.Join(memcgPrefix, host, "memory.usage_in_bytes")
 	eventControlPath := filepath.Join(memcgPrefix, host, "cgroup.event_control")
 	totalMemoryPath := filepath.Join(memcgPrefix, host, "memory.limit_in_bytes")
@@ -150,6 +154,5 @@ func setupEventfd(threshold int64) (f *os.File, err error) {
 		return nil, err
 	}
 
-	log.Printf(eventControlData)
 	return eventFile, nil
 }
